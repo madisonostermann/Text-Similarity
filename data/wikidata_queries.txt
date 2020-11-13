@@ -1,0 +1,57 @@
+#queries used in https://query.wikidata.org to get CSV files used for importing data to neo4j
+
+#women in science-related occupations
+SELECT DISTINCT ?personLabel ?occupationLabel ?birthdate ?deathdate ?nationalityLabel ?awardLabel WHERE {
+    ?person wdt:P31 wd:Q5 . #person
+    ?person wdt:P21 wd:Q6581072 . #female
+    ?person wdt:P106 ?occupation .
+    optional { ?person wdt:P569 ?birthdate . }
+    optional { ?person wdt:P570 ?deathdate . }
+    optional { ?person wdt:P27 ?nationality . }
+    optional { ?person wdt:P166 ?award . }
+    ?person wikibase:sitelinks ?linkcount .
+  FILTER (?linkcount >= 1) .     # only include items with 1 or more sitelinks
+  FILTER (?occupation = wd:Q170790 || ?occupation = wd:Q5482740 || ?occupation = wd:Q864503 
+          || ?occupation = wd:Q169470 || ?occupation = wd:Q593644 || ?occupation = wd:Q82594
+         || ?occupation = wd:Q39631 || ?occupation = wd:Q29169143 || ?occupation = wd:Q11063 
+         || ?occupation = wd:Q81096 || ?occupation = wd:Q2374149)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de,es,ar,fr" }
+}
+
+GROUP BY ?personLabel ?occupationLabel ?birthdate ?deathdate ?nationalityLabel ?awardLabel
+LIMIT 30000
+
+#descriptions for women in science-related occupations
+SELECT DISTINCT ?personLabel ?occupationLabel ?personDescription WHERE {
+    ?person wdt:P31 wd:Q5 . #person
+    ?person wdt:P21 wd:Q6581072 . #female
+    ?person wdt:P106 ?occupation .
+    ?person wikibase:sitelinks ?linkcount .
+  FILTER (?linkcount >= 1) .     # only include items with 1 or more sitelinks
+  FILTER (?occupation = wd:Q170790 || ?occupation = wd:Q5482740 || ?occupation = wd:Q864503 
+          || ?occupation = wd:Q169470 || ?occupation = wd:Q593644 || ?occupation = wd:Q82594
+         || ?occupation = wd:Q39631 || ?occupation = wd:Q29169143 || ?occupation = wd:Q11063 
+         || ?occupation = wd:Q81096 || ?occupation = wd:Q2374149)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de,es,ar,fr" }
+}
+
+GROUP BY ?personLabel ?occupationLabel ?personDescription
+LIMIT 30000
+
+#educational institutions for women in science-related occupations
+SELECT DISTINCT ?personLabel ?occupationLabel ?institutionLabel WHERE {
+    ?person wdt:P31 wd:Q5 . #person
+    ?person wdt:P21 wd:Q6581072 . #female
+    ?person wdt:P106 ?occupation .
+    ?person wdt:P69 ?institution .
+    ?person wikibase:sitelinks ?linkcount .
+  FILTER (?linkcount >= 1) .     # only include items with 1 or more sitelinks
+  FILTER (?occupation = wd:Q170790 || ?occupation = wd:Q5482740 || ?occupation = wd:Q864503 
+          || ?occupation = wd:Q169470 || ?occupation = wd:Q593644 || ?occupation = wd:Q82594
+         || ?occupation = wd:Q39631 || ?occupation = wd:Q29169143 || ?occupation = wd:Q11063 
+         || ?occupation = wd:Q81096 || ?occupation = wd:Q2374149)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de,es,ar,fr" }
+}
+
+GROUP BY ?personLabel ?occupationLabel ?institutionLabel
+LIMIT 30000
