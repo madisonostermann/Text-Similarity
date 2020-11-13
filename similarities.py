@@ -36,7 +36,7 @@ def connect_to_database():
     user = input()
     print("Neo4j DB Password: ")
     pswd = input()
-
+    
     # Make sure the database is started first, otherwise attempt to connect will fail
     try:
         graph = Graph('bolt://localhost:'+port, auth=(user, pswd))
@@ -65,37 +65,7 @@ def jaccard(desc1, desc2):
     overlap = desc1.intersection(desc2)
     return float(len(overlap)) / (len(desc1) + len(desc2) - len(overlap))
 
-def jaccard_compare_all():
-    global graph
-    start = time.perf_counter()
-    # Get the names & descriptions for people who have descriptions
-    results = graph.run("""MATCH (p:Person) WHERE EXISTS (p.description) RETURN p.name AS name, p.description AS description""").data()
-    names = []
-    descriptions = []
-    similarities = []
-    for result in results:
-        names.append(result['name'])
-        descriptions.append(result['description'])
-    # Find similarities between two descriptions at a time
-    for desc1 in descriptions:
-        sims = []
-        desc1_clean = clean(desc1)
-        for desc2 in descriptions:
-            desc2_clean = clean(desc2)
-            sims.append(jaccard(desc1_clean, desc2_clean))
-        similarities.append(sims)
-    # Create dataframe & save to csv
-    df = pd.DataFrame(similarities, index=names, columns=names)
-    df.to_csv('jaccard_comparison_all.csv')
-    # Create & save heatmap
-    sns.heatmap(df, annot=False)
-    plt.savefig('jaccard_comparison_all.png')
-    plt.clf()
-    # Record time
-    end = time.perf_counter()
-    print(f'TOTAL TIME FOR JACCARD COMPARISON OF ALL DESCRIPTIONS {end-start:0.4f}s')
-
-def jaccard_compare_some(names):
+def jaccard_compare(names):
     global graph
     start = time.perf_counter()
     # Find similarities between two descriptions at a time
@@ -124,39 +94,7 @@ def jaccard_compare_some(names):
     end = time.perf_counter()
     print(f'TOTAL TIME FOR JACCARD COMPARISON OF SOME DESCRIPTIONS {end-start:0.4f}s')
 
-def tf_idf_compare_all():
-    global graph
-    start = time.perf_counter()
-    # Get all names & descriptions for people with descriptions
-    results = graph.run("""MATCH (p:Person) WHERE EXISTS (p.description) RETURN p.name AS name, p.description AS description""").data()
-    names = []
-    descriptions = []
-    similarities = []
-    for result in results:
-        names.append(result['name'])
-        descriptions.append(result['description'])
-    # Find similarities between two descriptions at a time
-    for desc1 in descriptions:
-        sims = []
-        desc1_clean = clean(desc1)
-        for desc2 in descriptions:
-            desc2_clean = clean(desc2)
-            vect = TfidfVectorizer()
-            tfidf_matrix = vect.fit_transform([" ".join(desc1_clean), " ".join(desc2_clean)])
-            sims.append(1 - spatial.distance.cosine(tfidf_matrix.toarray()[0], tfidf_matrix.toarray()[1]))
-        similarities.append(sims)
-    # Create dataframe & save to csv
-    df = pd.DataFrame(similarities, index=names, columns=names)
-    df.to_csv('tf_idf_comparison_all.csv')
-    # Create & save heatmap
-    sns.heatmap(df, annot=False)
-    plt.savefig('tf_idf_comparison_all.png')
-    plt.clf()
-    # Record time
-    end = time.perf_counter()
-    print(f'TOTAL TIME FOR TF-IDF COMPARISON OF ALL DESCRIPTIONS {end-start:0.4f}s')
-
-def tf_idf_compare_some(names):
+def tf_idf_compare(names):
     global graph
     start = time.perf_counter()
     # Find similarities between two descriptions at a time
@@ -310,7 +248,7 @@ def create_doc2vec_model():
     print("SAVING DOC2VEC_MODEL")
     doc2vec_model.save("doc2vec.model")
 
-def doc2vec_compare_some(names):
+def doc2vec_compare(names):
     global doc2vec_model
     start = time.perf_counter()
     # Find similarities between two descriptions at a time
@@ -341,55 +279,22 @@ def doc2vec_compare_some(names):
     end = time.perf_counter()
     print(f'TOTAL TIME FOR DOC2VEC COMPARISON OF SOME DESCRIPTIONS {end-start:0.4f}s')
 
-def doc2vec_compare_all():
-    global graph
-    start = time.perf_counter()
-    # Get all names & descriptions for people with descriptions
-    results = graph.run("""MATCH (p:Person) WHERE EXISTS (p.description) RETURN p.name AS name, p.description AS description""").data()
-    names = []
-    descriptions = []
-    similarities = []
-    for result in results:
-        names.append(result['name'])
-        descriptions.append(result['description'])
-    # Find similarities between two descriptions at a time
-    for desc1 in descriptions:
-        sims = []
-        desc1_clean = clean(desc1)
-        desc1_vector = doc2vec_model.infer_vector(desc1_clean) 
-        for desc2 in descriptions:
-            desc2_clean = clean(desc2)
-            desc2_vector = doc2vec_model.infer_vector(desc2_vector)
-            sims.append(1 - spatial.distance.cosine(desc1_vector, desc2_vector))
-        similarities.append(sims)
-    # Create dataframe & save to csv
-    df = pd.DataFrame(similarities, index=names, columns=names)
-    df.to_csv('doc2vec_comparison_all.csv')
-    # Create & save heatmap
-    sns.heatmap(df, annot=False)
-    plt.savefig('doc2vec_comparison_all.png')
-    plt.clf()
-    # Record time
-    end = time.perf_counter()
-    print(f'TOTAL TIME FOR DOC2VEC COMPARISON OF ALL DESCRIPTIONS {end-start:0.4f}s')
-
 if __name__ == "__main__":
     connect_to_database()
 
     short_list = ['Ada Lovelace', 'Grace Hopper', 'Marie Curie', 'Katherine Johnson', 'Rosalind Franklin', 'Sally Ride', 'Julia R. Burdge', 'Elisabeth M. Werner']
-    jaccard_compare_some(short_list)
-    tf_idf_compare_some(short_list)
+    jaccard_compare(short_list)
+    tf_idf_compare(short_list)
 
     load_or_create_vocabulary()
     load_or_tag_tagged_vocabulary()
     load_or_create_doc2vec_model()
 
-    doc2vec_compare_some(short_list)
-
-
+    doc2vec_compare(short_list)
+    
     a = graph.run("""MATCH (p:Person)-[:works_as]-(o:Occupation) WHERE o.title='biologist' AND EXISTS (p.description) RETURN p.name AS name LIMIT 15""").to_data_frame()
     b = graph.run("""MATCH (p:Person)-[:works_as]-(o:Occupation) WHERE o.title='mathematician' AND EXISTS (p.description) RETURN p.name AS name LIMIT 15""").to_data_frame()
     people = list(a['name'])+list(b['name'])
-    jaccard_compare_some(people)
-    tf_idf_compare_some(people)
-    doc2vec_compare_some(people)
+    jaccard_compare(people)
+    tf_idf_compare(people)
+    doc2vec_compare(people)
