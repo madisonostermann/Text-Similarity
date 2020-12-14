@@ -38,56 +38,51 @@ except Exception as e:
 
 ########################################################
 
+query_list = []
+
 #create person nodes
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
 ","
 MERGE (person:Person { name: line.personLabel })
 ON CREATE SET person.birth = line.birthdate, person.death = line.deathdate
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-print("finished creating person nodes")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
 #create occupation nodes
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
 ","
 MERGE (occ:Occupation { title: line.occupationLabel })
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-print("finished creating occupation nodes")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
 #create nation nodes
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
 ","
 MERGE (nat:Nation { title: coalesce(line.nationalityLabel, ' ') })
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-print("finished creating nation nodes")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
 #create award nodes
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
 ","
 MERGE (award:Award { title: coalesce(line.awardLabel, ' ') })
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-print("finished creating award nodes")
-
-#remove blank nodes
-graph.run("""MATCH (n) WHERE n.title = ' ' DETACH DELETE n""")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
 #relate person and occupation nodes
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
@@ -95,12 +90,11 @@ RETURN line
 MATCH (person:Person { name: line.personLabel })
 MATCH (occ:Occupation { title: line.occupationLabel })
 MERGE (person)-[:works_as]->(occ)
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-print("finished relating person and occupation nodes")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
 #relate person and nation nodes 
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
@@ -108,12 +102,11 @@ RETURN line
 MATCH (person:Person { name: line.personLabel })
 MATCH (nat:Nation { title: line.nationalityLabel })
 MERGE (person)-[:citizen_of]->(nat)
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-print("finished relating person and nation nodes")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
 #relate person and award nodes
-graph.run("""CALL apoc.periodic.iterate("
+query_list.append("""CALL apoc.periodic.iterate("
 LOAD CSV WITH HEADERS 
 FROM 'file:///womeninstem.csv' AS line
 RETURN line
@@ -121,9 +114,57 @@ RETURN line
 MATCH (person:Person { name: line.personLabel })
 MATCH (award:Award { title: line.awardLabel })
 MERGE (award)-[:awarded_to]->(person)
-",{batchSize:1000, parallel:false, retries: 10})""")
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
 
-print("finished relating person and award nodes")
+#create more person nodes
+query_list.append("""CALL apoc.periodic.iterate("
+LOAD CSV WITH HEADERS 
+FROM 'file:///institutions.csv' AS line
+RETURN line
+","
+MERGE (person:Person { name: line.personLabel })
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
+
+#create institution nodes
+query_list.append("""CALL apoc.periodic.iterate("
+LOAD CSV WITH HEADERS 
+FROM 'file:///institutions.csv' AS line
+RETURN line
+","
+MERGE (i:Institution { title: coalesce(line.institutionLabel, ' ') })
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
+
+#relate person and institution nodes
+query_list.append("""CALL apoc.periodic.iterate("
+LOAD CSV WITH HEADERS 
+FROM 'file:///institutions.csv' AS line
+RETURN line
+","
+MATCH (person:Person { name: line.personLabel })
+MATCH (i:Institution { title: line.institutionLabel })
+MERGE (i)<-[:educated_at]->(person)
+",{batchSize:1000, parallel:false, retries: 10})
+YIELD operations""")
+
+for query in query_list:        
+   g = graph.begin() # open transaction        
+   result = g.run(query).to_data_frame() # execute query
+   try:            
+      if result['operations'][0]['failed'] > 0: #means batch failed
+         print('Could not finish query')
+      else: #means batch succeeded                
+         g.commit() # close transaction
+         print('Completed query ')
+   except Exception as e: #means there's a syntax or other error         
+      g.commit() # close transaction  
+      print('Completed query')
+
+
+#remove blank nodes
+graph.run("""MATCH (n) WHERE n.title = ' ' DETACH DELETE n""")
 
 #remove duplicates
 graph.run("""MATCH (n:Person)
@@ -159,32 +200,3 @@ DETACH DELETE p""")
 graph.run("""MATCH (p:Person)
 WHERE p.name CONTAINS "9" 
 DETACH DELETE p""")
-
-#create more person nodes
-graph.run("""CALL apoc.periodic.iterate("
-LOAD CSV WITH HEADERS 
-FROM 'file:///institutions.csv' AS line
-RETURN line
-","
-MERGE (person:Person { name: line.personLabel })
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-#create institution nodes
-graph.run("""CALL apoc.periodic.iterate("
-LOAD CSV WITH HEADERS 
-FROM 'file:///institutions.csv' AS line
-RETURN line
-","
-MERGE (i:Institution { title: coalesce(line.institutionLabel, ' ') })
-",{batchSize:1000, parallel:false, retries: 10})""")
-
-#relate person and institution nodes
-graph.run("""CALL apoc.periodic.iterate("
-LOAD CSV WITH HEADERS 
-FROM 'file:///institutions.csv' AS line
-RETURN line
-","
-MATCH (person:Person { name: line.personLabel })
-MATCH (i:Institution { title: line.institutionLabel })
-MERGE (i)<-[:educated_at]->(person)
-",{batchSize:1000, parallel:false, retries: 10})""")
